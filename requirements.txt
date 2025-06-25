@@ -1,12 +1,4 @@
-
 streamlit
 pandas
 requests
-scikit-learn
-
-
-streamlit
-pandas
-requests
-scikit-learn
-676e1762545a559d47489d7ae7d2ecd9d5af2578
+scikit-learn>=1.0
