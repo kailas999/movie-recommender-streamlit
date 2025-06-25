@@ -1,3 +1,4 @@
+
 # 🎬 Mood-Based Movie Recommender App
 
 This is a content-based movie recommendation system built using **Python, Streamlit, Pandas, Scikit-learn**, and the **TMDB API**.
@@ -26,3 +27,6 @@ It recommends:
 
 ## 📂 File Structure
 
+=======
+# movie-recommender-streamlit
+>>>>>>> 676e1762545a559d47489d7ae7d2ecd9d5af2578
