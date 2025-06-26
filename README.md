@@ -23,6 +23,11 @@ This is a simple and effective movie recommendation system built using **Streaml
 - TMDB API
 
 ---
+🌐 Live App
+👉 Click here to open the app on Streamlit Cloud-https://movie-recommender-app-cafrjzsfb4mvufciamkf3d.streamlit.app/
+
+Recommends movies based on genre similarity and fetches posters/descriptions.
+
 
 ## ▶️ How to Run Locally
 
