@@ -1,32 +1,31 @@
+# 🎬 Movie Recommender Engine with Posters
 
-# 🎬 Mood-Based Movie Recommender App
-
-This is a content-based movie recommendation system built using **Python, Streamlit, Pandas, Scikit-learn**, and the **TMDB API**.
-
-It recommends:
-- 🎯 Similar movies based on genre using TF-IDF + cosine similarity
-- 🎭 Movies based on your **current mood** (e.g., Happy, Sad, Bored, Inspired)
+This is a simple and effective movie recommendation system built using **Streamlit**, **pandas**, and **scikit-learn**. It recommends movies based on **genre similarity** using natural language processing (TF-IDF and cosine similarity), and fetches **movie posters and overviews** using the **TMDB API**.
 
 ---
 
-## 💡 Features
+## 🔍 Features
 
-- 🔍 Recommend movies based on a selected title
-- 😄 Mood-based recommendations using genre tagging
-- 🎞️ Posters & descriptions fetched from **TMDB API**
-- 🌐 Deployed on Streamlit Cloud
-
----
-
-## 🚀 Live Demo
-
-👉 Try the app here:  
-[https://movie-recommender-app-cafrjzsfb4mvufciamkf3d.streamlit.app](https://movie-recommender-app-cafrjzsfb4mvufciamkf3d.streamlit.app)
+- 🎥 Recommend top 10 similar movies based on genre
+- 🧠 Uses TF-IDF vectorization and cosine similarity
+- 🖼️ Automatically fetches movie posters and descriptions via TMDB API
+- ⚡ Built with **Streamlit** for interactive and easy-to-use UI
 
 ---
 
-## 📂 File Structure
+## 📦 Tech Stack
 
-=======
-# movie-recommender-streamlit
->>>>>>> 676e1762545a559d47489d7ae7d2ecd9d5af2578
+- Python 3
+- pandas
+- scikit-learn
+- requests
+- Streamlit
+- TMDB API
+
+---
+
+## ▶️ How to Run Locally
+
+1. **Navigate to your local folder:**
+   ```bash
+   cd "C:\Users\kailas\OneDrive\Documents\movie_recom"
