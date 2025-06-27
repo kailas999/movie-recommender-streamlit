@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 
 # ✅ Load TMDB API key from .env
 load_dotenv()
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "b134830ef4bfd4ae256a4046ee695176")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY", "your_tmdb_api_key")
 BASE_URL = "https://api.themoviedb.org/3"
 
-# 🌍 Supported Languages (you can add more)
+# 🌍 Languages you want to fetch movies for
 LANGUAGES = {
     "en": "English",
     "hi": "Hindi",
@@ -18,16 +18,16 @@ LANGUAGES = {
     "te": "Telugu"
 }
 
-# ✅ Fetch genre mappings
+# ✅ Get genre ID to name mapping from TMDB
 def get_genre_mapping():
     url = f"{BASE_URL}/genre/movie/list?api_key={TMDB_API_KEY}&language=en-US"
     response = requests.get(url)
     genres = response.json().get("genres", [])
     return {g["id"]: g["name"] for g in genres}
 
-# ✅ Fetch movies by language
+# ✅ Fetch movies for a given language and number of pages
 def fetch_movies_by_language(lang_code, pages=100):
-    all_movies = []
+    movies = []
     for page in range(1, pages + 1):
         url = (
             f"{BASE_URL}/discover/movie"
@@ -37,9 +37,10 @@ def fetch_movies_by_language(lang_code, pages=100):
         try:
             res = requests.get(url)
             if res.status_code == 200:
-                for movie in res.json().get("results", []):
-                    all_movies.append({
-                        "title": movie.get("title"),
+                results = res.json().get("results", [])
+                for movie in results:
+                    movies.append({
+                        "title": movie.get("title", ""),
                         "language": LANGUAGES.get(lang_code, lang_code),
                         "genre_ids": movie.get("genre_ids", []),
                         "release_date": movie.get("release_date", ""),
@@ -47,33 +48,41 @@ def fetch_movies_by_language(lang_code, pages=100):
                         "id": movie.get("id")
                     })
             else:
-                print(f"Error page {page} for {lang_code}")
+                print(f"⚠️ Error fetching page {page} for language {lang_code}")
         except Exception as e:
-            print(f"Failed on page {page} ({lang_code}): {e}")
-        time.sleep(0.25)
-    return all_movies
+            print(f"❌ Exception on page {page} ({lang_code}): {e}")
+        time.sleep(0.25)  # To avoid hitting API rate limits
+    return movies
 
-# ✅ Main fetch function
+# ✅ Main function to fetch and save all data
 def fetch_all_movies():
     genre_map = get_genre_mapping()
     all_movies = []
 
-    for lang in LANGUAGES:
-        print(f"📥 Fetching {LANGUAGES[lang]} movies...")
-        movies = fetch_movies_by_language(lang, pages=100)
-        all_movies.extend(movies)
+    for lang_code in LANGUAGES:
+        print(f"🔍 Fetching movies for language: {LANGUAGES[lang_code]} ({lang_code})")
+        lang_movies = fetch_movies_by_language(lang_code, pages=100)
+        all_movies.extend(lang_movies)
 
-    # ✅ Map genre_ids to genre names
+    # ✅ Convert genre IDs to names
     for movie in all_movies:
-        genre_names = [genre_map.get(genre_id, "") for genre_id in movie["genre_ids"]]
-        movie["genres"] = ", ".join(filter(None, genre_names))
-        del movie["genre_ids"]  # remove raw ids
+        genres = [genre_map.get(gid, "") for gid in movie.get("genre_ids", [])]
+        movie["genres"] = ", ".join(filter(None, genres))
+        del movie["genre_ids"]
 
-    # ✅ Save to CSV
-    df = pd.DataFrame(all_movies)
-    df.drop_duplicates(subset="title", inplace=True)
-    df.to_csv("movies.csv", index=False)
-    print(f"✅ {len(df)} movies saved to movies.csv")
+    # ✅ Load old data if exists and merge
+    new_df = pd.DataFrame(all_movies)
+    new_df.drop_duplicates(subset="title", inplace=True)
+
+    if os.path.exists("movies.csv"):
+        old_df = pd.read_csv("movies.csv")
+        combined_df = pd.concat([old_df, new_df], ignore_index=True)
+        combined_df.drop_duplicates(subset="title", inplace=True)
+        combined_df.to_csv("movies.csv", index=False)
+        print(f"✅ Merged: {len(combined_df)} total movies saved to movies.csv")
+    else:
+        new_df.to_csv("movies.csv", index=False)
+        print(f"✅ Saved: {len(new_df)} new movies to movies.csv")
 
 if __name__ == "__main__":
     fetch_all_movies()
