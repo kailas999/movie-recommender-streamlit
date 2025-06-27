@@ -76,7 +76,7 @@ def main():
         if recommendations:
             st.subheader(f"Top 10 movies similar to '{selected_movie}':")
             for title, score in recommendations:
-                st.markdown(f"### 🎬 {title} (Score: {score})")
+                st.markdown(f"### 🎬 {title} (Score: {100 * score})")
                 poster_url, overview = fetch_movie_details(title)
                 if poster_url:
                     st.image(poster_url, width=200)
