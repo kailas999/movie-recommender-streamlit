@@ -136,7 +136,7 @@ def main():
     st.sidebar.header("💬 Ask the AI")
     user_input = st.sidebar.text_area("Type your question here related to moves,webseries etc ...")
     if st.sidebar.button("Ask AI"):
-        with st.sidebar.spinner("Thinking..."):
+        with st.spinner("Thinking..."):
             answer = chat_with_ai(user_input)
             st.sidebar.success("Answer:")
             st.sidebar.write(answer)
