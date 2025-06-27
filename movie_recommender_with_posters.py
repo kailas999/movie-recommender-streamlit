@@ -27,7 +27,6 @@ def recommend(movie_title, df, similarity):
     sorted_movies = sorted(similarity_scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_movies]
 
-# Safe API call for poster & description
 def fetch_movie_details(movie_name):
     try:
         movie_name = movie_name.strip().replace(":", "").replace("&", "and")
@@ -36,15 +35,23 @@ def fetch_movie_details(movie_name):
         response.raise_for_status()
         data = response.json()
         if data.get('results'):
+            movie_id = data['results'][0]['id']
             poster_path = data['results'][0].get('poster_path')
             overview = data['results'][0].get('overview', 'No description available.')
             full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-            return full_poster_url, overview
-    except requests.exceptions.RequestException as e:
-        print(f"[Poster API Error] {e}")
-    return None, "TMDB info unavailable."
 
-# Safe API call for trailer
+            # Fetch Reviews
+            reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
+            reviews_response = requests.get(reviews_url).json()
+            if reviews_response.get('results'):
+                reviews = [f"**{r['author']}**: {r['content'][:250]}..." for r in reviews_response['results'][:2]]
+            else:
+                reviews = ["No reviews available."]
+            return full_poster_url, overview, reviews
+    except requests.exceptions.RequestException as e:
+        print(f"[Details API Error] {e}")
+    return None, "TMDB info unavailable.", ["No reviews available."]
+
 def fetch_trailer_url(movie_name):
     try:
         movie_name = movie_name.strip().replace(":", "").replace("&", "and")
@@ -63,7 +70,7 @@ def fetch_trailer_url(movie_name):
 
 def main():
     st.set_page_config(page_title="Movie Recommender", layout="centered")
-    st.title("🎬 Movie Recommendation Engine with Posters")
+    st.title("🎬 Movie Recommendation Engine with Posters, Trailers & Reviews")
 
     df = load_data()
     similarity = compute_similarity(df)
@@ -76,8 +83,9 @@ def main():
         if recommendations:
             st.subheader(f"Top 10 movies similar to '{selected_movie}':")
             for title, score in recommendations:
-                st.markdown(f"### 🎬 {title} (Score: {100 * score})")
-                poster_url, overview = fetch_movie_details(title)
+                st.markdown(f"### 🎬 {title} (Score: {100 * score:.1f})")
+                poster_url, overview, reviews = fetch_movie_details(title)
+
                 if poster_url:
                     st.image(poster_url, width=200)
                 st.write(overview)
@@ -85,6 +93,10 @@ def main():
                 trailer_url = fetch_trailer_url(title)
                 if trailer_url:
                     st.video(trailer_url)
+
+                st.markdown("#### 🗨️ Reviews:")
+                for review in reviews:
+                    st.markdown(f"- {review}")
 
                 st.markdown("---")
         else:
