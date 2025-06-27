@@ -1,7 +1,4 @@
 import os
-print("Current Working Directory:", os.getcwd())
-print("Files in current directory:", os.listdir())
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,21 +7,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 TMDB_API_KEY = "b134830ef4bfd4ae256a4046ee695176"
 
-# Load Data
 def load_data():
     df = pd.read_csv("movies.csv")
     df.dropna(subset=['genres'], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
 
-# Compute Similarity Matrix
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
     feature_vectors = vectorizer.fit_transform(df['genres'])
     similarity = cosine_similarity(feature_vectors)
     return similarity
 
-# Recommend Movies
 def recommend(movie_title, df, similarity):
     if movie_title not in df['title'].values:
         return []
@@ -33,20 +27,40 @@ def recommend(movie_title, df, similarity):
     sorted_movies = sorted(similarity_scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_movies]
 
-# Fetch movie poster and overview using TMDB
+# Safe API call for poster & description
 def fetch_movie_details(movie_name):
-    movie_name = movie_name.strip().replace(":", "").replace("&", "and")
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_name}"
-    response = requests.get(url)
-    data = response.json()
-    if data.get('results'):
-        poster_path = data['results'][0].get('poster_path')
-        overview = data['results'][0].get('overview', 'No description available.')
-        full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
-        return full_poster_url, overview
-    return None, "No description available."
+    try:
+        movie_name = movie_name.strip().replace(":", "").replace("&", "and")
+        url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_name}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data.get('results'):
+            poster_path = data['results'][0].get('poster_path')
+            overview = data['results'][0].get('overview', 'No description available.')
+            full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+            return full_poster_url, overview
+    except requests.exceptions.RequestException as e:
+        print(f"[Poster API Error] {e}")
+    return None, "TMDB info unavailable."
 
-# Streamlit UI
+# Safe API call for trailer
+def fetch_trailer_url(movie_name):
+    try:
+        movie_name = movie_name.strip().replace(":", "").replace("&", "and")
+        search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={movie_name}"
+        search_response = requests.get(search_url, timeout=10).json()
+        if search_response.get('results'):
+            movie_id = search_response['results'][0]['id']
+            video_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={TMDB_API_KEY}"
+            video_response = requests.get(video_url, timeout=10).json()
+            for video in video_response['results']:
+                if video['type'] == 'Trailer' and video['site'] == 'YouTube':
+                    return f"https://www.youtube.com/watch?v={video['key']}"
+    except requests.exceptions.RequestException as e:
+        print(f"[Trailer API Error] {e}")
+    return None
+
 def main():
     st.set_page_config(page_title="Movie Recommender", layout="centered")
     st.title("🎬 Movie Recommendation Engine with Posters")
@@ -67,6 +81,11 @@ def main():
                 if poster_url:
                     st.image(poster_url, width=200)
                 st.write(overview)
+
+                trailer_url = fetch_trailer_url(title)
+                if trailer_url:
+                    st.video(trailer_url)
+
                 st.markdown("---")
         else:
             st.warning("Movie not found in dataset.")
