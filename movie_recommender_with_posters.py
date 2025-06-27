@@ -84,7 +84,7 @@ def chat_with_ai(user_input):
     "1. Movie Name [Netflix]\n2. Another Movie [Prime Video]\n"
     "Also answer questions about genres (e.g., thriller, romantic), actor-based suggestions, moods (e.g., bored, sad), and upcoming releases. "
     "Be helpful, human-like, and friendly. Never say 'I don't know' — always suggest something useful."
-)
+
 
         )
 
