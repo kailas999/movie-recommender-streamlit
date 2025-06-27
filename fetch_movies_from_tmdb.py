@@ -1,35 +1,79 @@
-import pandas as pd
 import requests
+import pandas as pd
 import time
+import os
+from dotenv import load_dotenv
 
-TMDB_API_KEY = "b134830ef4bfd4ae256a4046ee695176"  # your TMDB API key
+# ✅ Load TMDB API key from .env
+load_dotenv()
+TMDB_API_KEY = os.getenv("TMDB_API_KEY", "b134830ef4bfd4ae256a4046ee695176")
+BASE_URL = "https://api.themoviedb.org/3"
 
-def fetch_genres(title):
-    try:
-        search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
-        res = requests.get(search_url)
-        data = res.json()
-        if data['results']:
-            movie_id = data['results'][0]['id']
-            genre_url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={TMDB_API_KEY}"
-            genre_res = requests.get(genre_url)
-            genre_data = genre_res.json()
-            genres = [g['name'] for g in genre_data.get("genres", [])]
-            return " ".join(genres)
-    except Exception as e:
-        print(f"Error for {title}: {e}")
-    return ""
+# 🌍 Supported Languages (you can add more)
+LANGUAGES = {
+    "en": "English",
+    "hi": "Hindi",
+    "mr": "Marathi",
+    "ta": "Tamil",
+    "te": "Telugu"
+}
 
-# Load your movies.csv
-df = pd.read_csv("movies.csv")
+# ✅ Fetch genre mappings
+def get_genre_mapping():
+    url = f"{BASE_URL}/genre/movie/list?api_key={TMDB_API_KEY}&language=en-US"
+    response = requests.get(url)
+    genres = response.json().get("genres", [])
+    return {g["id"]: g["name"] for g in genres}
 
-# Add genres column
-df["genres"] = df["title"].apply(fetch_genres)
+# ✅ Fetch movies by language
+def fetch_movies_by_language(lang_code, pages=100):
+    all_movies = []
+    for page in range(1, pages + 1):
+        url = (
+            f"{BASE_URL}/discover/movie"
+            f"?api_key={TMDB_API_KEY}&with_original_language={lang_code}"
+            f"&sort_by=popularity.desc&page={page}"
+        )
+        try:
+            res = requests.get(url)
+            if res.status_code == 200:
+                for movie in res.json().get("results", []):
+                    all_movies.append({
+                        "title": movie.get("title"),
+                        "language": LANGUAGES.get(lang_code, lang_code),
+                        "genre_ids": movie.get("genre_ids", []),
+                        "release_date": movie.get("release_date", ""),
+                        "popularity": movie.get("popularity", 0),
+                        "id": movie.get("id")
+                    })
+            else:
+                print(f"Error page {page} for {lang_code}")
+        except Exception as e:
+            print(f"Failed on page {page} ({lang_code}): {e}")
+        time.sleep(0.25)
+    return all_movies
 
-# Remove rows where no genres were fetched
-df = df[df["genres"].str.strip() != ""]
+# ✅ Main fetch function
+def fetch_all_movies():
+    genre_map = get_genre_mapping()
+    all_movies = []
 
-# Save new file
-df.to_csv("movies_with_genres.csv", index=False)
-print("✅ Done: Saved as movies_with_genres.csv")
+    for lang in LANGUAGES:
+        print(f"📥 Fetching {LANGUAGES[lang]} movies...")
+        movies = fetch_movies_by_language(lang, pages=100)
+        all_movies.extend(movies)
 
+    # ✅ Map genre_ids to genre names
+    for movie in all_movies:
+        genre_names = [genre_map.get(genre_id, "") for genre_id in movie["genre_ids"]]
+        movie["genres"] = ", ".join(filter(None, genre_names))
+        del movie["genre_ids"]  # remove raw ids
+
+    # ✅ Save to CSV
+    df = pd.DataFrame(all_movies)
+    df.drop_duplicates(subset="title", inplace=True)
+    df.to_csv("movies.csv", index=False)
+    print(f"✅ {len(df)} movies saved to movies.csv")
+
+if __name__ == "__main__":
+    fetch_all_movies()
