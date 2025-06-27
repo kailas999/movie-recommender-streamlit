@@ -5,13 +5,13 @@ import requests
 from dotenv import load_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import openai
+from openai import OpenAI
 
 # Load API Keys from .env
 load_dotenv()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY", "b134830ef4bfd4ae256a4046ee695176")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 def load_data():
     df = pd.read_csv("movies.csv")
@@ -46,7 +46,6 @@ def fetch_movie_details(movie_name):
             overview = movie.get('overview', 'No description available.')
             full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-            # Reviews
             reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
             reviews_response = requests.get(reviews_url).json()
             if reviews_response.get('results'):
@@ -76,12 +75,11 @@ def fetch_trailer_url(movie_name):
 
 def chat_with_ai(prompt):
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=150
+            messages=[{"role": "user", "content": prompt}]
         )
-        return response.choices[0].message['content']
+        return response.choices[0].message.content
     except Exception as e:
         return f"AI response failed: {str(e)}"
 
@@ -118,9 +116,9 @@ def main():
         else:
             st.warning("❌ Movie not found in dataset.")
 
-    # 💬 AI Assistant Section
+    # AI Chat Assistant
     st.sidebar.header("🧠 AI Movie Assistant")
-    user_question = st.sidebar.text_area("Ask something about movies or this app:")
+    user_question = st.sidebar.text_area("Ask something about movies or the app:")
     if st.sidebar.button("Ask AI"):
         with st.spinner("Thinking..."):
             answer = chat_with_ai(user_question)
