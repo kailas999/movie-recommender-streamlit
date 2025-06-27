@@ -7,10 +7,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
-# Load API Keys from .env
+# Load environment variables
 load_dotenv()
-TMDB_API_KEY = os.getenv("TMDB_API_KEY", "b134830ef4bfd4ae256a4046ee695176")
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 def load_data():
@@ -22,37 +23,35 @@ def load_data():
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
     feature_vectors = vectorizer.fit_transform(df['genres'])
-    similarity = cosine_similarity(feature_vectors)
-    return similarity
+    return cosine_similarity(feature_vectors)
 
 def recommend(movie_title, df, similarity):
     if movie_title not in df['title'].values:
         return []
     index = df[df['title'] == movie_title].index[0]
-    similarity_scores = list(enumerate(similarity[index]))
-    sorted_movies = sorted(similarity_scores, key=lambda x: x[1], reverse=True)[1:11]
-    return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_movies]
+    scores = list(enumerate(similarity[index]))
+    sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:11]
+    return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_scores]
 
 def fetch_movie_details(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
         url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        if data.get('results'):
-            movie = data['results'][0]
+        res = requests.get(url).json()
+        if res.get('results'):
+            movie = res['results'][0]
             movie_id = movie['id']
-            poster_path = movie.get('poster_path')
+            poster_url = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None
             overview = movie.get('overview', 'No description available.')
-            full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
+            # Reviews
             reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
-            reviews_response = requests.get(reviews_url).json()
-            if reviews_response.get('results'):
-                reviews = [f"**{r['author']}**: {r['content'][:250]}..." for r in reviews_response['results'][:2]]
-            else:
-                reviews = ["No reviews available."]
-            return full_poster_url, overview, reviews
+            review_res = requests.get(reviews_url).json()
+            reviews = [
+                f"**{r['author']}**: {r['content'][:250]}..." 
+                for r in review_res.get('results', [])[:2]
+            ] or ["No reviews available."]
+            return poster_url, overview, reviews
     except Exception as e:
         print(f"[fetch_movie_details Error] {e}")
     return None, "TMDB info unavailable.", ["No reviews available."]
@@ -65,10 +64,10 @@ def fetch_trailer_url(movie_name):
         if res.get('results'):
             movie_id = res['results'][0]['id']
             video_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={TMDB_API_KEY}"
-            video_response = requests.get(video_url).json()
-            for video in video_response['results']:
-                if video['type'] == 'Trailer' and video['site'] == 'YouTube':
-                    return f"https://www.youtube.com/watch?v={video['key']}"
+            videos = requests.get(video_url).json().get('results', [])
+            for v in videos:
+                if v['type'] == 'Trailer' and v['site'] == 'YouTube':
+                    return f"https://www.youtube.com/watch?v={v['key']}"
     except Exception as e:
         print(f"[fetch_trailer_url Error] {e}")
     return None
@@ -77,7 +76,8 @@ def chat_with_ai(prompt):
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -100,7 +100,6 @@ def main():
             for title, score in recommendations:
                 st.markdown(f"### 🎬 {title} (Score: {100 * score:.1f})")
                 poster_url, overview, reviews = fetch_movie_details(title)
-
                 if poster_url:
                     st.image(poster_url, width=200)
                 st.write(overview)
@@ -116,13 +115,13 @@ def main():
         else:
             st.warning("❌ Movie not found in dataset.")
 
-    # AI Chat Assistant
+    # 💬 AI Assistant Section
     st.sidebar.header("🧠 AI Movie Assistant")
-    user_question = st.sidebar.text_area("Ask something about movies or the app:")
+    user_input = st.sidebar.text_area("Ask about movies or this app:")
     if st.sidebar.button("Ask AI"):
         with st.spinner("Thinking..."):
-            answer = chat_with_ai(user_question)
-            st.sidebar.success("Answer:")
+            answer = chat_with_ai(user_input)
+            st.sidebar.success("AI says:")
             st.sidebar.write(answer)
 
 if __name__ == '__main__':
