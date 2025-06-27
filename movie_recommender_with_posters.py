@@ -2,16 +2,28 @@ import os
 import streamlit as st
 import pandas as pd
 import requests
+import openai
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+# 🔑 Your TMDB API Key
 TMDB_API_KEY = "b134830ef4bfd4ae256a4046ee695176"
+
+# 🔐 Your OpenAI API Key (replace with your actual key)
+openai.api_key = "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
+
+
+"  # <= paste your OpenAI API key here
+
+# ======================= DATA LOADING =======================
 
 def load_data():
     df = pd.read_csv("movies.csv")
     df.dropna(subset=['genres'], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
+
+# ======================= SIMILARITY =======================
 
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
@@ -27,6 +39,8 @@ def recommend(movie_title, df, similarity):
     sorted_movies = sorted(similarity_scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_movies]
 
+# ======================= POSTER, OVERVIEW, REVIEWS =======================
+
 def fetch_movie_details(movie_name):
     try:
         movie_name = movie_name.strip().replace(":", "").replace("&", "and")
@@ -40,7 +54,7 @@ def fetch_movie_details(movie_name):
             overview = data['results'][0].get('overview', 'No description available.')
             full_poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-            # Fetch Reviews
+            # Reviews
             reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
             reviews_response = requests.get(reviews_url).json()
             if reviews_response.get('results'):
@@ -51,6 +65,8 @@ def fetch_movie_details(movie_name):
     except requests.exceptions.RequestException as e:
         print(f"[Details API Error] {e}")
     return None, "TMDB info unavailable.", ["No reviews available."]
+
+# ======================= TRAILER =======================
 
 def fetch_trailer_url(movie_name):
     try:
@@ -68,9 +84,26 @@ def fetch_trailer_url(movie_name):
         print(f"[Trailer API Error] {e}")
     return None
 
+# ======================= OPENAI CHATBOT =======================
+
+def ask_openai(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a friendly movie expert who helps users explore movies, genres, and recommendations."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        return f"❌ Error from AI: {e}"
+
+# ======================= STREAMLIT APP =======================
+
 def main():
     st.set_page_config(page_title="Movie Recommender", layout="centered")
-    st.title("🎬 Movie Recommendation Engine with Posters, Trailers & Reviews")
+    st.title("🎬 Movie Recommendation Engine with Posters, Trailers, Reviews & Chatbot")
 
     df = load_data()
     similarity = compute_similarity(df)
@@ -83,7 +116,7 @@ def main():
         if recommendations:
             st.subheader(f"Top 10 movies similar to '{selected_movie}':")
             for title, score in recommendations:
-                st.markdown(f"### 🎬 {title} (Score: {100 * score:.1f})")
+                st.markdown(f"### 🎬 {title} (Similarity: {score * 100:.1f}%)")
                 poster_url, overview, reviews = fetch_movie_details(title)
 
                 if poster_url:
@@ -101,6 +134,18 @@ def main():
                 st.markdown("---")
         else:
             st.warning("Movie not found in dataset.")
+
+    # 🔮 OpenAI Chatbot
+    st.markdown("## 🤖 Ask Your AI Movie Buddy")
+    user_input = st.text_input("Ask about movies, genres, actors, or get suggestions:")
+
+    if st.button("Ask AI"):
+        if user_input.strip():
+            with st.spinner("Thinking..."):
+                answer = ask_openai(user_input)
+                st.success(answer)
+        else:
+            st.warning("Type a question to ask!")
 
 if __name__ == '__main__':
     main()
