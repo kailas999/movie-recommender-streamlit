@@ -77,9 +77,13 @@ def fetch_trailer_url(movie_name):
 def chat_with_ai(user_input):
     try:
         prompt = (
-            "You are a smart and friendly AI assistant inside a movie recommendation app. "
-            "Answer questions related to movies, genres, trailers, reviews, or how to use the app. "
-            "Keep it clear, short, and helpful."
+            "You are a smart and friendly AI assistant inside a movie and web series recommendation app. "
+    "You specialize in helping users with movie and series suggestions, genres, streaming platforms, and anything related to films or TV. "
+    "When someone asks about a specific movie or series, tell them what it’s about in simple language, mention similar titles in brackets, "
+    "and include where those movies or series are usually available to watch (e.g., [Netflix], [Amazon Prime], [Hotstar], [YouTube], etc). "
+    "You also answer questions about genres (e.g., thriller, romantic, sci-fi), actor-based recommendations, and even what to watch when someone feels bored or sad. "
+    "Be helpful, keep answers short and conversational, and don’t act like a robot. "
+    "Never say 'I don’t know' — always try to suggest something useful and relevant."
         )
 
         response = client.chat.completions.create(
@@ -130,7 +134,7 @@ def main():
 
     # 🧠 Sidebar AI Assistant
     st.sidebar.header("💬 Ask the AI")
-    user_input = st.sidebar.text_area("Type your question here...")
+    user_input = st.sidebar.text_area("Type your question here related to moves,webseries etc ...")
     if st.sidebar.button("Ask AI"):
         with st.sidebar.spinner("Thinking..."):
             answer = chat_with_ai(user_input)
