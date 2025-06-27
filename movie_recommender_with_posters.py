@@ -7,6 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
+<<<<<<< HEAD
 # ✅ Load environment variables from .env
 load_dotenv()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -35,6 +36,22 @@ def load_data():
         st.stop()
 
 # ✅ Compute TF-IDF similarity
+=======
+# ✅ Load environment variables
+load_dotenv()
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
+
+# ✅ Load movie data
+def load_data():
+    df = pd.read_csv("C:/Users/kailas/OneDrive/Documents/movie_recom/movies_with_genres.csv")
+    df.dropna(subset=['genres'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+# ✅ TF-IDF similarity
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
     features = vectorizer.fit_transform(df['genres'])
@@ -70,7 +87,11 @@ def fetch_movie_details(movie_name):
         print(f"[Error fetch_movie_details] {e}")
         return None, "TMDB info unavailable.", ["No reviews available."]
 
+<<<<<<< HEAD
 # ✅ Trailer from TMDB/YouTube
+=======
+# ✅ Trailer from YouTube via TMDB
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
 def fetch_trailer_url(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
@@ -85,14 +106,26 @@ def fetch_trailer_url(movie_name):
         print(f"[Error fetch_trailer_url] {e}")
     return None
 
+<<<<<<< HEAD
 # ✅ OpenAI Assistant with Movie Prompt
+=======
+# ✅ AI Assistant with custom prompt
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
 def chat_with_ai(user_input):
     try:
         prompt = (
             "You are a smart and friendly AI assistant inside a movie and web series recommendation app. "
+<<<<<<< HEAD
             "You help users find movies or series based on genres, platforms, moods, actors, or questions like 'what to watch when bored'. "
             "Always explain movie names briefly and list similar movies vertically like:\n"
             "1. Movie One [Netflix]\n2. Movie Two [Amazon Prime]"
+=======
+            "You specialize in helping users with movie and series suggestions, genres, streaming platforms, and anything related to films or TV. "
+            "When someone asks about a specific movie or series, tell them what it’s about in simple language, "
+            "mention similar titles in vertical list format with platform info (e.g., [Netflix], [Prime Video]). "
+            "Also answer questions about genres (e.g., thriller, romantic), actor-based suggestions, moods (e.g., bored, sad), and upcoming releases. "
+            "Be helpful, human-like, and friendly. Never say 'I don't know' — always suggest something useful."
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
         )
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -109,7 +142,11 @@ def chat_with_ai(user_input):
 
 # ✅ Streamlit App
 def main():
+<<<<<<< HEAD
     st.set_page_config(page_title="🎬 Movie Recommender + AI", layout="centered")
+=======
+    st.set_page_config(page_title="Movie Recommender + AI", layout="centered")
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
     st.title("🎬 Movie Recommendation Engine with Posters, Reviews, Trailers & AI")
 
     df = load_data()
@@ -142,7 +179,11 @@ def main():
 
     # 🧠 Sidebar AI Assistant
     st.sidebar.header("💬 Ask the AI")
+<<<<<<< HEAD
     user_input = st.sidebar.text_area("Type your question about movies, web series, actors, moods...")
+=======
+    user_input = st.sidebar.text_area("Type your question here (about movies, web series, genres, moods...)")
+>>>>>>> 0b1c7044a9e09cec99fddb0f6b56495a8917297b
     if st.sidebar.button("Ask AI"):
         with st.spinner("Thinking..."):
             answer = chat_with_ai(user_input)
