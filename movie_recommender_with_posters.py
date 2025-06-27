@@ -9,11 +9,25 @@ TMDB_API_KEY = "b134830ef4bfd4ae256a4046ee695176"
 
 def load_data():
     df = pd.read_csv("movies.csv")
-    df.dropna(subset=['genres'], inplace=True)
+    
+    # Ensure 'genres' column exists
+    if 'genres' not in df.columns:
+        st.error("❌ 'genres' column not found in movies.csv. Please check your dataset.")
+        return None
+
+    # Fill missing genres and drop rows with empty genres
+    df['genres'] = df['genres'].fillna("")
+    df = df[df['genres'].str.strip() != ""]
+
+    if df.empty:
+        st.error("❌ DataFrame is empty after filtering. Check 'genres' column values.")
+        return None
+
     df.reset_index(drop=True, inplace=True)
     return df
 
 def compute_similarity(df):
+    print("Checking genres column sample:", df['genres'].head())
     vectorizer = TfidfVectorizer(stop_words='english')
     feature_vectors = vectorizer.fit_transform(df['genres'])
     similarity = cosine_similarity(feature_vectors)
@@ -62,10 +76,16 @@ def fetch_trailer_url(movie_name):
     return None
 
 def main():
+    """
+    Main function to run the Streamlit app.
+    """
     st.set_page_config(page_title="Movie Recommender", layout="centered")
     st.title("🎬 Movie Recommendation Engine with Posters")
 
     df = load_data()
+    if df is None:
+        st.stop()  # ⛔ Stop app execution if df is invalid
+
     similarity = compute_similarity(df)
 
     movie_list = df['title'].values
@@ -76,7 +96,7 @@ def main():
         if recommendations:
             st.subheader(f"Top 10 movies similar to '{selected_movie}':")
             for title, score in recommendations:
-                st.markdown(f"### 🎬 {title} (Score: {score})")
+                st.markdown(f"### 🎬 {title} (Score: {100* score})")
                 poster_url, overview = fetch_movie_details(title)
                 if poster_url:
                     st.image(poster_url, width=200)
