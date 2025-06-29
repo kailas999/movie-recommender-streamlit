@@ -17,16 +17,21 @@ if not TMDB_API_KEY or not OPENAI_API_KEY:
     st.error("❌ Missing API keys in .env file. Please set TMDB_API_KEY and OPENAI_API_KEY.")
     st.stop()
 
-# ✅ Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ✅ Load movie data
 def load_data():
     try:
-        df = pd.read_csv("movies_with_genres.csv")  # Ensure this file exists in the project root
+        df = pd.read_csv("movies_with_genres.csv")
         if df.empty or 'genres' not in df.columns:
             st.error("❌ CSV file is empty or missing 'genres' column.")
             st.stop()
+
+        # Ensure language column exists
+        if 'language' not in df.columns:
+            df['language'] = 'unknown'
+
+        df['language'] = df['language'].fillna('unknown').str.lower()
         df.dropna(subset=['genres'], inplace=True)
         df.reset_index(drop=True, inplace=True)
         return df
@@ -34,13 +39,11 @@ def load_data():
         st.error("❌ movies_with_genres.csv not found in project directory.")
         st.stop()
 
-# ✅ Compute TF-IDF similarity
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
     features = vectorizer.fit_transform(df['genres'])
     return cosine_similarity(features)
 
-# ✅ Recommend similar movies
 def recommend(movie_title, df, similarity):
     if movie_title not in df['title'].values:
         return []
@@ -49,7 +52,6 @@ def recommend(movie_title, df, similarity):
     sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_scores]
 
-# ✅ Fetch poster, overview, reviews
 def fetch_movie_details(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
@@ -61,7 +63,6 @@ def fetch_movie_details(movie_name):
         overview = movie.get("overview", "No description available.")
         poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-        # Reviews
         review_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
         review_data = requests.get(review_url).json().get("results", [])
         reviews = [f"**{r['author']}**: {r['content'][:300]}..." for r in review_data[:2]] or ["No reviews available."]
@@ -70,7 +71,6 @@ def fetch_movie_details(movie_name):
         print(f"[Error fetch_movie_details] {e}")
         return None, "TMDB info unavailable.", ["No reviews available."]
 
-# ✅ Trailer from TMDB/YouTube
 def fetch_trailer_url(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
@@ -85,7 +85,6 @@ def fetch_trailer_url(movie_name):
         print(f"[Error fetch_trailer_url] {e}")
     return None
 
-# ✅ OpenAI Assistant with Movie Prompt
 def chat_with_ai(user_input):
     try:
         prompt = (
@@ -107,12 +106,26 @@ def chat_with_ai(user_input):
     except Exception as e:
         return f"AI response failed: {str(e)}"
 
-# ✅ Streamlit App
+# ✅ Main Streamlit App
 def main():
     st.set_page_config(page_title="🎬 Movie Recommender + AI", layout="centered")
     st.title("🎬 Movie Recommendation Engine with Posters, Reviews, Trailers & AI")
 
-    df = load_data()
+    df_full = load_data()
+
+    # 🌐 Language filter
+    language_list = ['all'] + sorted(df_full['language'].dropna().unique())
+    selected_language = st.selectbox("🌐 Filter by Language", language_list)
+
+    if selected_language != 'all':
+        df = df_full[df_full['language'] == selected_language]
+    else:
+        df = df_full
+
+    if df.empty:
+        st.warning("No movies available in the selected language.")
+        return
+
     similarity = compute_similarity(df)
 
     movie_list = df['title'].values
