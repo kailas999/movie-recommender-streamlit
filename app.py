@@ -22,12 +22,11 @@ def load_data():
     df.reset_index(drop=True, inplace=True)
     return df
 
-# ✅ Similarity using TF-IDF
+# ✅ Compute similarity matrix
 def compute_similarity(df):
-    vectorizer = TfidfVectorizer(stop_words='english')
-    feature_vectors = vectorizer.fit_transform(df['genres'])
-    similarity = cosine_similarity(feature_vectors)
-    return similarity
+    tfidf = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf.fit_transform(df['genres'])
+    return cosine_similarity(tfidf_matrix, tfidf_matrix)
 
 # ✅ Recommend similar movies
 def recommend(movie_title, df, similarity):
@@ -142,6 +141,7 @@ def main():
             answer = chat_with_ai(user_input)
             st.sidebar.success("Answer:")
             st.sidebar.write(answer)
+
 
 if __name__ == '__main__':
     main()

@@ -121,6 +121,7 @@ def main():
     movie_list = df['title'].values
     selected_movie = st.selectbox("🎥 Choose a movie to get recommendations:", movie_list, key="movie_select")
 
+    # Only define and use recommendations after the button is pressed
     if st.button("🎯 Recommend"):
         recommendations = recommend(selected_movie, df, similarity)
         if recommendations:
