@@ -7,20 +7,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
-# ✅ Load environment variables from .env
+# ✅ Load .env keys
 load_dotenv()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# ✅ API key validation
-if not TMDB_API_KEY or not OPENAI_API_KEY:
-    st.error("❌ Please set TMDB_API_KEY and OPENAI_API_KEY in your .env file.")
-    st.stop()
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ✅ Load movie data
-@st.cache_data
 def load_data():
     try:
         df = pd.read_csv("movies_with_genres.csv")
@@ -34,27 +27,28 @@ def load_data():
         df.reset_index(drop=True, inplace=True)
         return df
     except FileNotFoundError:
-        st.error("❌ File 'movies_with_genres.csv' not found.")
+        st.error("❌ movies_with_genres.csv not found.")
         st.stop()
 
-# ✅ Compute similarity
+# ✅ TF-IDF genre similarity
 def compute_similarity(df):
     vectorizer = TfidfVectorizer(stop_words='english')
     features = vectorizer.fit_transform(df['genres'])
     return cosine_similarity(features)
 
-# ✅ Recommend movies
+# ✅ Movie recommender
 def recommend(movie_title, df, similarity):
     if movie_title not in df['title'].values:
         return []
     index = df[df['title'] == movie_title].index[0]
     if index >= similarity.shape[0]:
-        return []
+        st.error("❌ Error: Similarity index out of bounds. Please regenerate the similarity matrix.")
+        st.stop()
     scores = list(enumerate(similarity[index]))
     sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_scores]
 
-# ✅ Fetch poster, overview, reviews
+# ✅ Poster, overview, reviews from TMDB
 def fetch_movie_details(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
@@ -66,16 +60,15 @@ def fetch_movie_details(movie_name):
         overview = movie.get("overview", "No description available.")
         poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-        # Reviews
         review_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
         review_data = requests.get(review_url).json().get("results", [])
         reviews = [f"**{r['author']}**: {r['content'][:300]}..." for r in review_data[:2]] or ["No reviews available."]
         return poster_url, overview, reviews
     except Exception as e:
-        print(f"[Error] fetch_movie_details: {e}")
+        print(f"[ERROR fetch_movie_details] {e}")
         return None, "TMDB info unavailable.", ["No reviews available."]
 
-# ✅ Fetch trailer
+# ✅ Trailer fetch
 def fetch_trailer_url(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
@@ -87,17 +80,15 @@ def fetch_trailer_url(movie_name):
             if video["site"] == "YouTube" and video["type"] == "Trailer":
                 return f"https://www.youtube.com/watch?v={video['key']}"
     except Exception as e:
-        print(f"[Error] fetch_trailer_url: {e}")
+        print(f"[ERROR fetch_trailer_url] {e}")
     return None
 
-# ✅ Chat assistant
+# ✅ OpenAI Chat
 def chat_with_ai(user_input):
     try:
         prompt = (
-            "You are an intelligent, friendly movie assistant. "
-            "Help users with movie/series suggestions based on moods, genres, actors, or platforms. "
-            "Answer clearly. Recommend movies in a vertical list like:\n"
-            "1. Inception [Netflix]\n2. Dangal [Prime]"
+            "You are a friendly movie assistant. Help users with movie recommendations, moods, genres, and overviews. "
+            "Provide helpful suggestions with platform info. Example format:\n1. Movie Name [Netflix]"
         )
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -110,26 +101,23 @@ def chat_with_ai(user_input):
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"❌ AI response failed: {str(e)}"
+        return f"AI error: {str(e)}"
 
-# ✅ Streamlit App
+# ✅ Streamlit UI
 def main():
     st.set_page_config(page_title="🎬 Movie Recommender + AI", layout="centered")
-    st.title("🎬 Movie Recommendation Engine with Posters, Trailers, Reviews & AI")
+    st.title("🎬 Movie Recommendation Engine with Posters, Reviews, Trailers & AI")
 
     df_full = load_data()
-
-    # 🌐 Language Filter
     language_list = ['all'] + sorted(df_full['language'].dropna().unique())
-    selected_language = st.selectbox("🌐 Filter by Language", language_list, key="lang_filter")
+    selected_language = st.selectbox("🌐 Filter by Language", language_list, key="language_filter")
 
     df = df_full if selected_language == 'all' else df_full[df_full['language'] == selected_language]
     if df.empty:
-        st.warning("❌ No movies available for selected language.")
+        st.warning("No movies found for this language.")
         return
 
     similarity = compute_similarity(df)
-
     movie_list = df['title'].values
     selected_movie = st.selectbox("🎥 Choose a movie to get recommendations:", movie_list, key="movie_select")
 
@@ -151,11 +139,10 @@ def main():
                     st.markdown(f"- {review}")
                 st.markdown("---")
         else:
-            st.warning("❌ Movie not found in dataset.")
+            st.warning("Movie not found in dataset.")
 
-    # 🤖 AI Chat Assistant
-    st.sidebar.header("💬 Ask Movie AI")
-    user_input = st.sidebar.text_area("Ask about genres, moods, actors, etc.")
+    st.sidebar.header("💬 Ask AI Assistant")
+    user_input = st.sidebar.text_area("Ask about movies, moods, platforms...", key="ai_input")
     if st.sidebar.button("Ask AI"):
         with st.spinner("Thinking..."):
             answer = chat_with_ai(user_input)
