@@ -7,10 +7,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from openai import OpenAI
 
+
+# ✅ Must be the FIRST Streamlit command
+st.set_page_config(page_title="🎬 Movie Recommender + AI", layout="centered")
+
 # ✅ Load environment variables from .env
 load_dotenv()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ✅ Validate API keys
 if not TMDB_API_KEY or not OPENAI_API_KEY:
@@ -25,7 +30,7 @@ def load_data():
         df = pd.read_csv("movies_with_genres.csv")
         if df.empty or 'genres' not in df.columns:
             st.error("❌ CSV file is empty or missing 'genres' column.")
-            st.stop()
+            return
 
         # Ensure language column exists
         if 'language' not in df.columns:
@@ -48,9 +53,13 @@ def recommend(movie_title, df, similarity):
     if movie_title not in df['title'].values:
         return []
     index = df[df['title'] == movie_title].index[0]
+    if index >= similarity.shape[0]:
+        return []  # Prevent out-of-bounds error
     scores = list(enumerate(similarity[index]))
     sorted_scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:11]
     return [(df.iloc[i]['title'], round(score, 3)) for i, score in sorted_scores]
+
+
 
 def fetch_movie_details(movie_name):
     try:
@@ -108,31 +117,20 @@ def chat_with_ai(user_input):
 
 # ✅ Main Streamlit App
 def main():
-    st.set_page_config(page_title="🎬 Movie Recommender + AI", layout="centered")
-    st.title("🎬 Movie Recommendation Engine with Posters, Reviews, Trailers & AI")
+    st.title("🎬 Movie Recommender")
 
-    df_full = load_data()
-
-    # 🌐 Language filter
-    language_list = ['all'] + sorted(df_full['language'].dropna().unique())
-    selected_language = st.selectbox("🌐 Filter by Language", language_list)
-
-    if selected_language != 'all':
-        df = df_full[df_full['language'] == selected_language]
-    else:
-        df = df_full
-
-    if df.empty:
-        st.warning("No movies available in the selected language.")
-        return
-
+    df = load_data()
     similarity = compute_similarity(df)
 
-    movie_list = df['title'].values
-    selected_movie = st.selectbox("🎥 Choose a movie to get recommendations:", movie_list)
+    language_list = sorted(df['language'].unique())
+    selected_language = st.selectbox("🌐 Filter by Language", language_list, key="language_selector")
+
+    filtered_df = df[df['language'] == selected_language]
+    movie_list = filtered_df['title'].values
+    selected_movie = st.selectbox("🎥 Choose a movie:", movie_list, key="movie_selector")
 
     if st.button("🎯 Recommend"):
-        recommendations = recommend(selected_movie, df, similarity)
+        recommendations = recommend(selected_movie, filtered_df, similarity)
         if recommendations:
             st.subheader(f"Top 10 similar movies to '{selected_movie}':")
             for title, score in recommendations:
@@ -162,5 +160,19 @@ def main():
             st.sidebar.success("Answer:")
             st.sidebar.write(answer)
 
+   
+    st.warning("Movie not found in dataset.")
+
+    # 🧠 Sidebar AI Assistant
+    st.sidebar.header("💬 Ask the AI")
+    user_input = st.sidebar.text_area("Type your question about movies, web series, actors, moods...")
+    if st.sidebar.button("Ask AI"):
+        with st.spinner("Thinking..."):
+            answer = chat_with_ai(user_input)
+            st.sidebar.success("Answer:")
+            st.sidebar.write(answer)
+
 if __name__ == "__main__":
     main()
+    main()
+    main() 
