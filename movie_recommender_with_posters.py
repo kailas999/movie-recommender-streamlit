@@ -13,22 +13,32 @@ TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ✅ Load movie data
+# ✅ Load movie data (updated with cast/keywords)
 @st.cache_resource
 def load_data():
-    df = pd.read_csv("movies_with_genres.csv")
-    df.dropna(subset=['genres'], inplace=True)
+    df = pd.read_csv("movies_with_cast_keywords.csv")  # Ensure this file exists!
+    df.dropna(subset=['genres', 'cast', 'keywords'], inplace=True)
     df.reset_index(drop=True, inplace=True)
     return df
 
-# ✅ Compute genre similarity matrix
+# ✅ Compute hybrid similarity (genres + cast + keywords)
 @st.cache_data
 def compute_similarity(df):
+    # Combine all textual features into one string per movie
+    df["combined_features"] = (
+        df["genres"].fillna("") + " " +
+        df["cast"].fillna("") + " " +
+        df["keywords"].fillna("")
+    )
+    
+    # TF-IDF on combined features
     tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['genres'])
+    tfidf_matrix = tfidf.fit_transform(df["combined_features"])
+    
+    # Cosine similarity
     return cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-# ✅ Recommend similar movies
+# ✅ Recommend similar movies (uses hybrid similarity)
 def recommend(movie_title, df, similarity):
     try:
         filtered_df = df.reset_index(drop=True)
@@ -40,26 +50,43 @@ def recommend(movie_title, df, similarity):
         print(f"[ERROR in recommend] {e}")
         return []
 
-# ✅ Fetch poster, overview, reviews
-def fetch_movie_details(movie_name):
+# ✅ Fetch enhanced movie details (includes cast/keywords)
+def fetch_enhanced_movie_details(movie_name):
     try:
         query = movie_name.strip().replace(":", "").replace("&", "and")
         search_url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
         res = requests.get(search_url).json()
         movie = res.get("results", [{}])[0]
         movie_id = movie.get("id")
+        
+        # Fetch cast (top 5 actors)
+        credits_url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?api_key={TMDB_API_KEY}"
+        credits = requests.get(credits_url).json()
+        cast = ", ".join([actor["name"] for actor in credits.get("cast", [])[:5]])
+        
+        # Fetch keywords (themes like "superhero", "time travel")
+        keywords_url = f"https://api.themoviedb.org/3/movie/{movie_id}/keywords?api_key={TMDB_API_KEY}"
+        keywords = ", ".join([kw["name"] for kw in requests.get(keywords_url).json().get("keywords", [])])
+        
+        # Existing poster/overview
         poster_path = movie.get("poster_path")
-        overview = movie.get("overview", "No description available.")
         poster_url = f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path else "https://via.placeholder.com/220x330?text=No+Poster"
-
-        # Reviews
-        reviews_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={TMDB_API_KEY}"
-        review_data = requests.get(reviews_url).json().get("results", [])
-        reviews = [f"**{r['author']}**: {r['content'][:300]}..." for r in review_data[:2]] or ["No reviews available."]
-        return poster_url, overview, reviews
+        overview = movie.get("overview", "No description available.")
+        
+        return {
+            "poster_url": poster_url,
+            "overview": overview,
+            "cast": cast,
+            "keywords": keywords
+        }
     except Exception as e:
-        print(f"[Error fetch_movie_details] {e}")
-        return "https://via.placeholder.com/220x330?text=No+Poster", "No description available.", ["No reviews available."]
+        print(f"[Error fetch_enhanced_movie_details] {e}")
+        return {
+            "poster_url": "https://via.placeholder.com/220x330?text=No+Poster",
+            "overview": "No description available.",
+            "cast": "",
+            "keywords": ""
+        }
 
 # ✅ Fetch YouTube trailer
 def fetch_trailer_url(movie_name):
@@ -102,35 +129,41 @@ def chat_with_ai(user_input):
 def main():
     st.set_page_config(page_title="Movie Recommender + AI", layout="centered")
     st.title("🎬 Movie Recommendation Engine with Posters, Reviews, Trailers & AI")
-
     df_full = load_data()
-
-    # Language filter
+    
+    # Language filter (optional, keep if you have language data)
     language_list = ['all'] + sorted(df_full['language'].dropna().unique())
     selected_language = st.selectbox("🌐 Filter by Language", language_list, key="language_filter")
     df = df_full if selected_language == 'all' else df_full[df_full['language'] == selected_language]
-
     if df.empty:
         st.warning("No movies found for this language.")
         return
-
+    
     similarity = compute_similarity(df)
     movie_list = df['title'].values
     selected_movie = st.selectbox("🎥 Choose a movie to get recommendations:", movie_list)
-
+    
     if st.button("🎯 Recommend"):
         recommendations = recommend(selected_movie, df, similarity)
         if recommendations:
             st.subheader(f"Top 10 similar movies to '{selected_movie}':")
             for idx, (title, score) in enumerate(recommendations):
                 st.markdown(f"### 🎬 {title} ({score*100:.1f}%)")
-                poster, overview, reviews = fetch_movie_details(title)
-                if poster:
-                    st.image(poster, width=220)
-                st.write(f"📖 {overview}")
+                enhanced_details = fetch_enhanced_movie_details(title)
+                
+                # Display poster and overview
+                st.image(enhanced_details["poster_url"], width=220)
+                st.write(f"📖 {enhanced_details['overview']}")
+                
+                # NEW: Show cast and keywords
+                st.write(f"🎭 Cast: {enhanced_details['cast']}")
+                st.write(f"🔑 Keywords: {enhanced_details['keywords']}")
+                
+                # Trailer and reviews (unchanged)
                 trailer_url = fetch_trailer_url(title)
                 if trailer_url:
                     st.video(trailer_url)
+                reviews = fetch_reviews(title)  # Assume you have a fetch_reviews function
                 st.markdown("📝 **Reviews:**")
                 for review in reviews:
                     st.markdown(f"- {review}")
